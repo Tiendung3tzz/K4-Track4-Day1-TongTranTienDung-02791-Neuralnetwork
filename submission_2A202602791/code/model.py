@@ -43,6 +43,7 @@ class MLP(nn.Module):
             raise ValueError("dropout phải nằm trong [0, 1)")
         if in_features <= 0 or num_classes <= 0:
             raise ValueError("in_features và num_classes phải dương")
+
         layers: list[nn.Module] = []
         in_dim = in_features
         for width in hidden:

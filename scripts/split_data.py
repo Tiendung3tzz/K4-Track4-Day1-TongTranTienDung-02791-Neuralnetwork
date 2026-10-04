@@ -16,10 +16,17 @@ Lưu ý:
   - Nhãn được đổi từ 1..7 về 0..6 và ép sang int64 (cross-entropy của PyTorch cần int64).
 """
 import argparse
+import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+
+if hasattr(sys.stdout, "reconfigure"):
+    # Windows terminals may use a legacy code page that cannot print the
+    # Vietnamese diagnostics below.  Keep the required command portable.
+    sys.stdout.reconfigure(encoding="utf-8")
 
 LABEL = "Cover_Type"
 N_TOTAL, N_TRAIN, N_EVAL = 581_012, 464_809, 116_203   # kiểm tra metadata không bị sửa

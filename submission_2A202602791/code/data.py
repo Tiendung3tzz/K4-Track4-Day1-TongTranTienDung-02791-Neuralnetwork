@@ -11,6 +11,8 @@ Tập eval CHỈ dùng để chấm điểm cuối. Không dùng nó để chọ
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import torch
 
@@ -26,28 +28,31 @@ def load_split(processed_dir: str = "data/processed"):
       2. np.load(f"{processed_dir}/eval.npz")  -> khoá "X", "y", "row_id"
       3. assert shape/dtype đúng quy ước ở đầu file
     """
-    import os
-    train_path, eval_path = os.path.join(processed_dir, "train.npz"), os.path.join(processed_dir, "eval.npz")
-    with np.load(train_path, allow_pickle=False) as train:
+    processed_path = Path(processed_dir)
+    with np.load(processed_path / "train.npz", allow_pickle=False) as train:
         if not {"X", "y"}.issubset(train.files):
             raise KeyError("train.npz phải có khoá X và y")
-        X_train, y_train = np.array(train["X"], copy=True), np.array(train["y"], copy=True)
-    with np.load(eval_path, allow_pickle=False) as ev:
-        if not {"X", "y", "row_id"}.issubset(ev.files):
+        X_train_full = np.array(train["X"], copy=True)
+        y_train_full = np.array(train["y"], copy=True)
+    with np.load(processed_path / "eval.npz", allow_pickle=False) as eval_data:
+        if not {"X", "y", "row_id"}.issubset(eval_data.files):
             raise KeyError("eval.npz phải có khoá X, y và row_id")
-        X_eval, y_eval, eval_row_id = (np.array(ev[k], copy=True) for k in ("X", "y", "row_id"))
-    for name, X, y in (("train", X_train, y_train), ("eval", X_eval, y_eval)):
+        X_eval = np.array(eval_data["X"], copy=True)
+        y_eval = np.array(eval_data["y"], copy=True)
+        eval_row_id = np.array(eval_data["row_id"], copy=True)
+
+    for name, X, y in (("train", X_train_full, y_train_full), ("eval", X_eval, y_eval)):
         if X.ndim != 2 or X.shape[1] != 54 or X.dtype != np.float32:
-            raise ValueError(f"{name} X phải có shape (N, 54), dtype float32")
-        if y.shape != (len(X),) or y.dtype != np.int64:
-            raise ValueError(f"{name} y phải có shape (N,), dtype int64")
+            raise ValueError(f"{name} X phải có shape (N, 54) và dtype float32, nhận {X.shape}, {X.dtype}")
+        if y.shape != (X.shape[0],) or y.dtype != np.int64:
+            raise ValueError(f"{name} y phải có shape (N,) và dtype int64, nhận {y.shape}, {y.dtype}")
         if len(y) and (y.min() < 0 or y.max() > 6):
             raise ValueError(f"{name} y phải chứa nhãn 0..6")
-    if eval_row_id.shape != (len(X_eval),) or eval_row_id.dtype != np.int64:
+    if eval_row_id.shape != (X_eval.shape[0],) or eval_row_id.dtype != np.int64:
         raise ValueError("eval_row_id phải có shape (N_eval,) và dtype int64")
     if len(np.unique(eval_row_id)) != len(eval_row_id):
         raise ValueError("eval_row_id không được trùng")
-    return X_train, y_train, X_eval, y_eval, eval_row_id
+    return X_train_full, y_train_full, X_eval, y_eval, eval_row_id
 
 
 def make_val_split(X, y, val_fraction: float = 0.2, seed: int = 42):
@@ -79,7 +84,8 @@ def fit_standardizer(X_tr):
     if X_tr.ndim != 2 or X_tr.shape[1] < N_NUMERIC:
         raise ValueError(f"X_tr phải có ít nhất {N_NUMERIC} cột")
     numeric = X_tr[:, :N_NUMERIC].astype(np.float64, copy=False)
-    mean, std = numeric.mean(axis=0), numeric.std(axis=0)
+    mean = numeric.mean(axis=0)
+    std = numeric.std(axis=0)
     std = np.where(std == 0.0, 1.0, std)
     return mean.astype(np.float32), std.astype(np.float32)
 
@@ -117,7 +123,9 @@ def prepare_data(device: str, val_fraction: float = 0.2, seed: int = 42,
     X_full, y_full, X_eval, y_eval, eval_row_id = load_split(processed_dir)
     X_tr, y_tr, X_val, y_val = make_val_split(X_full, y_full, val_fraction, seed)
     mean, std = fit_standardizer(X_tr)
-    X_tr, X_val, X_eval = (apply_standardizer(X, mean, std) for X in (X_tr, X_val, X_eval))
+    X_tr = apply_standardizer(X_tr, mean, std)
+    X_val = apply_standardizer(X_val, mean, std)
+    X_eval = apply_standardizer(X_eval, mean, std)
     data = {
         "X_tr": torch.tensor(X_tr, dtype=torch.float32, device=device),
         "y_tr": torch.tensor(y_tr, dtype=torch.int64, device=device),
@@ -129,9 +137,9 @@ def prepare_data(device: str, val_fraction: float = 0.2, seed: int = 42,
         "mean": mean,
         "std": std,
     }
-    majority = int(np.bincount(y_tr, minlength=7).argmax())
+    majority_class = int(np.bincount(y_tr, minlength=7).argmax())
     print(f"X_tr={tuple(data['X_tr'].shape)}, X_val={tuple(data['X_val'].shape)}, X_eval={tuple(data['X_eval'].shape)}")
-    print(f"majority class on train={majority}, validation accuracy={np.mean(y_val == majority):.4f}")
+    print(f"majority class on train={majority_class}, validation accuracy={np.mean(y_val == majority_class):.4f}")
     return data
 
 

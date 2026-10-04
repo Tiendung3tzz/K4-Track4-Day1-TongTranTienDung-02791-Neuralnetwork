@@ -37,10 +37,16 @@ def build_optimizer(name: str, params, lr: float, weight_decay: float = 0.0,
     if name == "sgd":
         return torch.optim.SGD(params, lr=lr, weight_decay=weight_decay)
     if name == "sgd_momentum":
-        return torch.optim.SGD(params, lr=lr, momentum=momentum, weight_decay=weight_decay)
+        return torch.optim.SGD(
+            params, lr=lr, momentum=momentum, weight_decay=weight_decay
+        )
     if name == "adam":
-        return torch.optim.Adam(params, lr=lr, betas=betas, eps=eps, weight_decay=weight_decay)
-    return torch.optim.AdamW(params, lr=lr, betas=betas, eps=eps, weight_decay=weight_decay)
+        return torch.optim.Adam(
+            params, lr=lr, betas=betas, eps=eps, weight_decay=weight_decay
+        )
+    return torch.optim.AdamW(
+        params, lr=lr, betas=betas, eps=eps, weight_decay=weight_decay
+    )
 
 
 def build_scheduler(optimizer, name: str | None, total_steps: int, **kwargs):
@@ -54,11 +60,15 @@ def build_scheduler(optimizer, name: str | None, total_steps: int, **kwargs):
     if total_steps <= 0:
         raise ValueError("total_steps phải dương")
     if key in {"cosine", "cosineannealing", "cosine_annealing"}:
-        return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=total_steps, **kwargs)
+        return torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=total_steps, **kwargs
+        )
     if key == "step":
         step_size = kwargs.pop("step_size", max(1, total_steps // 3))
         gamma = kwargs.pop("gamma", 0.1)
-        return torch.optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma, **kwargs)
+        return torch.optim.lr_scheduler.StepLR(
+            optimizer, step_size=step_size, gamma=gamma, **kwargs
+        )
     raise ValueError("scheduler không được hỗ trợ; dùng None, cosine hoặc step")
 
 
